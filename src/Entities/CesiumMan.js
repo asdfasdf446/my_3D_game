@@ -7,30 +7,52 @@ let sharedModelTemplate = null;
 
 export class CesiumMan {
     constructor(scene, inputManager, isRemote = false, initialPos = {x:0, z:0}) {
-        this.scene = scene; this.input = inputManager; this.isRemote = isRemote; 
+        this.scene = scene;
+        this.input = inputManager;
+        this.isRemote = isRemote; 
+        
         this.container = new THREE.Group();
         this.container.position.set(initialPos.x, 0, initialPos.z);
         this.scene.add(this.container);
-        this.mixer = null; this.model = null; this.activeAction = null;
-        this.radius = 0.4; this.others = []; this.networkManager = null; this.netId = null; this.isNPC = false;
-        
-        // --- 修复 Bug 1: 显式初始化 ---
-        this.useProxyModel = false; 
 
-        this.moveSpeed = 0.04; this.currentDir = 1; this.rotateSpeed = 0.05;
-        this.initDebugMesh(); this.loadModel();
+        this.mixer = null;
+        this.model = null;
+        this.activeAction = null;
+
+        this.radius = 0.4; 
+        this.others = []; 
+        this.networkManager = null;
+        this.netId = null;
+        this.isNPC = false;
+
+        // --- 修复：显式初始化 ---
+        this.useProxyModel = false;
+
+        this.moveSpeed = 0.04; 
+        this.currentDir = 1;   
+        this.rotateSpeed = 0.05;
+
+        this.initDebugMesh();
+        this.loadModel();
     }
+    
     setNetworkManager(nm) { this.networkManager = nm; }
     setObstacles(objects) { this.others = objects; }
+
     initDebugMesh() {
         const geometry = new THREE.BoxGeometry(0.5, 1.8, 0.5); 
         this.proxyMesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0x0000ff }));
-        this.proxyMesh.position.y = 0.9; this.proxyMesh.visible = false;
+        this.proxyMesh.position.y = 0.9;
+        this.proxyMesh.visible = false;
         this.container.add(this.proxyMesh);
-        this.colliderMesh = new THREE.LineSegments(new THREE.WireframeGeometry(geometry), new THREE.LineBasicMaterial({ color: 0xffff00 }));
-        this.colliderMesh.position.y = 0.9; this.colliderMesh.visible = false;
+
+        const wireframeGeo = new THREE.WireframeGeometry(geometry);
+        this.colliderMesh = new THREE.LineSegments(wireframeGeo, new THREE.LineBasicMaterial({ color: 0xffff00 }));
+        this.colliderMesh.position.y = 0.9;
+        this.colliderMesh.visible = false;
         this.container.add(this.colliderMesh);
     }
+
     setName(name) {
         if(!this.isRemote || this.isNPC) return; 
         const old = this.container.getObjectByName('nameTag');
@@ -44,42 +66,65 @@ export class CesiumMan {
         sprite.position.y = 2.0; sprite.scale.set(2, 0.5, 1); sprite.name = 'nameTag';
         this.container.add(sprite);
     }
+
     loadModel() {
-        if (sharedModelTemplate) this.setupFromTemplate(sharedModelTemplate);
-        else sharedLoader.load('/CesiumMan.glb', (gltf) => { sharedModelTemplate = gltf; this.setupFromTemplate(gltf); });
+        if (sharedModelTemplate) {
+            this.setupFromTemplate(sharedModelTemplate);
+        } else {
+            sharedLoader.load('/CesiumMan.glb', (gltf) => {
+                sharedModelTemplate = gltf;
+                this.setupFromTemplate(gltf);
+            });
+        }
     }
+
     setupFromTemplate(gltf) {
         this.model = SkeletonUtils.clone(gltf.scene);
         this.model.rotation.y = Math.PI; 
         this.model.traverse(c => { if(c.isMesh) { c.castShadow = true; c.receiveShadow = true; }});
         this.container.add(this.model);
+
         this.mixer = new THREE.AnimationMixer(this.model);
         if(gltf.animations[0]) {
             this.activeAction = this.mixer.clipAction(gltf.animations[0]);
             this.activeAction.play();
         }
+        
         this.updateVisibility();
     }
+
     updateRemote(data) {
-        this.container.position.x = data.x; this.container.position.z = data.z; this.container.rotation.y = data.rotation;
+        this.container.position.x = data.x;
+        this.container.position.z = data.z;
+        this.container.rotation.y = data.rotation;
     }
-    applyPush(vx, vz) {
-        const newX = this.container.position.x + vx; const newZ = this.container.position.z + vz;
+
+    applyPush(vectorX, vectorZ) {
+        const newX = this.container.position.x + vectorX;
+        const newZ = this.container.position.z + vectorZ;
         if(newX > -30 && newX < 30) this.container.position.x = newX;
         if(newZ > -30 && newZ < 30) this.container.position.z = newZ;
     }
-    checkBoundary(pos) { return (pos.x > -30 && pos.x < 30 && pos.z > -30 && pos.z < 30); }
+
+    checkBoundary(pos) {
+        const LIMIT = 30;
+        return (pos.x > -LIMIT && pos.x < LIMIT && pos.z > -LIMIT && pos.z < LIMIT);
+    }
+
     detectCollision(proposedPos) {
         for (const other of this.others) {
             if (!other.container) continue;
-            if (proposedPos.distanceTo(other.getPosition()) < this.radius + (other.radius || 0.4)) {
+            const dist = proposedPos.distanceTo(other.getPosition());
+            if (dist < this.radius + (other.radius || 0.4)) {
                 return { collided: true, target: other };
             }
         }
         return { collided: false };
     }
+
     update(dt) {
         if (!this.model) return;
+
         if (!this.isRemote) {
             if (this.input.keys.a) this.container.rotation.y += this.rotateSpeed;
             if (this.input.keys.d) this.container.rotation.y -= this.rotateSpeed;
@@ -103,9 +148,17 @@ export class CesiumMan {
                 }
             }
         }
+
         if (this.mixer) this.mixer.update(dt);
     }
-    setDebugMode(p, c) { this.useProxyModel = p; if(this.colliderMesh) this.colliderMesh.visible = c; this.updateVisibility(); }
+
+    // --- 修复：状态更新时确保同步 ---
+    setDebugMode(useProxy, showPhysics) {
+        this.useProxyModel = useProxy;
+        if(this.colliderMesh) this.colliderMesh.visible = showPhysics;
+        this.updateVisibility();
+    }
+
     updateVisibility() {
         if (!this.model) return;
         this.model.visible = !this.useProxyModel;

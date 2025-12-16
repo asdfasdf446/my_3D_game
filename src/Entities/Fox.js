@@ -10,31 +10,52 @@ export class Fox {
         this.scene = scene;
         this.input = inputManager;
         this.isRemote = isRemote; 
+        
         this.container = new THREE.Group();
         this.container.position.set(initialPos.x, 0, initialPos.z);
         this.scene.add(this.container);
-        this.mixer = null; this.actions = {}; this.activeAction = null; this.model = null;
-        this.radius = 0.4; this.others = []; this.networkManager = null; this.isNPC = false;
+
+        this.mixer = null;
+        this.actions = {};
+        this.activeAction = null;
+        this.model = null;
+
+        this.radius = 0.4; 
+        this.others = []; 
+        this.networkManager = null;
+        this.isNPC = false;
         
-        // --- 修复 Bug 1: 显式初始化 ---
+        // --- 修复：显式初始化状态 ---
         this.useProxyModel = false; 
 
         this.currentState = 'Survey';
-        this.params = { walkSpeed: 0.05, runSpeed: 0.15, rotateSpeed: 0.05 };
+        this.params = {
+            walkSpeed: 0.05,
+            runSpeed: 0.15,
+            rotateSpeed: 0.05
+        };
+
         this.initDebugMesh();
         this.loadModel();
     }
+    
     setNetworkManager(nm) { this.networkManager = nm; }
     setObstacles(foxes) { this.others = foxes; }
+
     initDebugMesh() {
         const geometry = new THREE.BoxGeometry(0.5, 1, 1.5); 
         this.proxyMesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({ color: 0xff0000 }));
-        this.proxyMesh.position.y = 0.5; this.proxyMesh.visible = false;
+        this.proxyMesh.position.y = 0.5;
+        this.proxyMesh.visible = false;
         this.container.add(this.proxyMesh);
-        this.colliderMesh = new THREE.LineSegments(new THREE.WireframeGeometry(geometry), new THREE.LineBasicMaterial({ color: 0xffff00 }));
-        this.colliderMesh.position.y = 0.5; this.colliderMesh.visible = false;
+
+        const wireframeGeo = new THREE.WireframeGeometry(geometry);
+        this.colliderMesh = new THREE.LineSegments(wireframeGeo, new THREE.LineBasicMaterial({ color: 0xffff00 }));
+        this.colliderMesh.position.y = 0.5;
+        this.colliderMesh.visible = false;
         this.container.add(this.colliderMesh);
     }
+
     setName(name) {
         if(!this.isRemote || this.isNPC) return; 
         const old = this.container.getObjectByName('nameTag');
@@ -48,15 +69,24 @@ export class Fox {
         sprite.position.y = 1.8; sprite.scale.set(2, 0.5, 1); sprite.name = 'nameTag';
         this.container.add(sprite);
     }
+
     loadModel() {
-        if (sharedModelTemplate) this.setupFromTemplate(sharedModelTemplate);
-        else sharedLoader.load('/Fox.glb', (gltf) => { sharedModelTemplate = gltf; this.setupFromTemplate(gltf); });
+        if (sharedModelTemplate) {
+            this.setupFromTemplate(sharedModelTemplate);
+        } else {
+            sharedLoader.load('/Fox.glb', (gltf) => {
+                sharedModelTemplate = gltf;
+                this.setupFromTemplate(gltf);
+            });
+        }
     }
+
     setupFromTemplate(gltf) {
         this.model = SkeletonUtils.clone(gltf.scene);
         this.model.scale.set(0.02, 0.02, 0.02);
         this.model.traverse(c => { if(c.isMesh) { c.castShadow = true; c.receiveShadow = true; }});
         this.container.add(this.model);
+
         this.mixer = new THREE.AnimationMixer(this.model);
         const getClip = (name) => THREE.AnimationClip.findByName(gltf.animations, name);
         this.actions['Survey'] = this.mixer.clipAction(getClip('Survey'));
@@ -66,29 +96,43 @@ export class Fox {
         this.activeAction.play();
         this.updateVisibility();
     }
+
     updateRemote(data) {
-        this.container.position.x = data.x; this.container.position.z = data.z; this.container.rotation.y = data.rotation;
-        if (data.action && data.action !== this.currentState) this.fadeToAction(data.action, 1);
+        this.container.position.x = data.x;
+        this.container.position.z = data.z;
+        this.container.rotation.y = data.rotation;
+        if (data.action && data.action !== this.currentState) {
+            this.fadeToAction(data.action, 1);
+        }
     }
-    applyPush(vx, vz) {
-        const newX = this.container.position.x + vx; const newZ = this.container.position.z + vz;
+
+    applyPush(vectorX, vectorZ) {
+        const newX = this.container.position.x + vectorX;
+        const newZ = this.container.position.z + vectorZ;
         if(newX > -30 && newX < 30) this.container.position.x = newX;
         if(newZ > -30 && newZ < 30) this.container.position.z = newZ;
     }
-    checkBoundary(pos) { return (pos.x > -30 && pos.x < 30 && pos.z > -30 && pos.z < 30); }
-    detectCollision(proposedPos, myForward) {
-        for (const other of this.others) {
-            if (!other.container) continue;
-            const dist = proposedPos.distanceTo(other.getPosition());
-            if (dist < this.radius + (other.radius||0.4)) {
-                const otherForward = new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0), other.getRotation());
-                const isOtherMoving = other.getActionState() !== 'Survey';
-                const isHeadOn = isOtherMoving && (myForward.dot(otherForward) < -0.5);
-                return { collided: true, target: other, isHeadOn };
+
+    detectCollision(proposedPos, myForwardVector) {
+        for (const otherFox of this.others) {
+            if (!otherFox.container) continue;
+            const dist = proposedPos.distanceTo(otherFox.getPosition());
+            if (dist < this.radius + (otherFox.radius||0.4)) {
+                const otherForward = new THREE.Vector3(0,0,1).applyAxisAngle(new THREE.Vector3(0,1,0), otherFox.getRotation());
+                const isOtherMoving = otherFox.getActionState() !== 'Survey';
+                const dot = myForwardVector.dot(otherForward);
+                const isHeadOn = isOtherMoving && (dot < -0.5);
+                return { collided: true, target: otherFox, isHeadOn: isHeadOn };
             }
         }
         return { collided: false };
     }
+
+    checkBoundary(pos) {
+        const LIMIT = 30;
+        return (pos.x > -LIMIT && pos.x < LIMIT && pos.z > -LIMIT && pos.z < LIMIT);
+    }
+
     update(dt) {
         if (!this.model) return;
         if (!this.isRemote) {
@@ -120,17 +164,26 @@ export class Fox {
         }
         if (this.mixer) this.mixer.update(dt);
     }
-    setDebugMode(p, c) { this.useProxyModel = p; if(this.colliderMesh) this.colliderMesh.visible = c; this.updateVisibility(); }
+
+    // --- 修复：状态更新时确保同步 ---
+    setDebugMode(useProxy, showPhysics) {
+        this.useProxyModel = useProxy;
+        if(this.colliderMesh) this.colliderMesh.visible = showPhysics;
+        this.updateVisibility();
+    }
+
     updateVisibility() {
         if (!this.model) return;
         this.model.visible = !this.useProxyModel;
         this.proxyMesh.visible = this.useProxyModel;
     }
+
     fadeToAction(name, timeScale) {
         const next = this.actions[name]; if(!next) return;
         next.timeScale = timeScale;
         if (this.currentState !== name) {
-            if(this.activeAction) this.activeAction.fadeOut(0.2);
+            const prev = this.activeAction;
+            if(prev) prev.fadeOut(0.2);
             next.reset().fadeIn(0.2).play();
             this.activeAction = next; this.currentState = name;
         }
