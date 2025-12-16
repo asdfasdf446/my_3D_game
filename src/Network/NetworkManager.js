@@ -12,7 +12,12 @@ export class NetworkManager {
         this.joinInfo = { name, modelType };
         this.localPlayer = localPlayer;
         this.localPlayer.setNetworkManager(this);
-        this.socket = io(`${window.location.protocol}//${window.location.hostname}:3000`);
+        
+        // --- 核心修改：自动连接当前域名 ---
+        // io() 不带参数时，默认连接 window.location.origin
+        // 这样无论你是 http://your-ip:3000 还是 https://game.com，都能自动连对
+        this.socket = io(); 
+
         this.socket.on('connect', () => { this.isConnected = true; this.socket.emit('join', this.joinInfo); });
         this.socket.on('init', (data) => {
             this.ui.updateStatus(`Joined as ${this.joinInfo.modelType}`);

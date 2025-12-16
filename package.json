@@ -7,7 +7,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server/index.js",
-    "start": "npm run server & npm run dev"
+    "start": "npm run server & npm run dev",
+    "prod": "node server/index.js"
   },
   "dependencies": {
     "express": "^4.18.2",

@@ -1,10 +1,26 @@
 import express from 'express';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+// --- 配置路径 ---
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+// 指向上一级目录的 dist 文件夹 (构建产物)
+const distPath = path.join(__dirname, '../dist');
 
 const app = express();
 const httpServer = createServer(app);
-const io = new Server(httpServer, { cors: { origin: "*", methods: ["GET", "POST"] } });
+
+const io = new Server(httpServer, {
+  // 生产环境通常不需要 CORS 配置，因为前端和后端同源
+  // 但为了保险，还是允许所有
+  cors: { origin: "*", methods: ["GET", "POST"] }
+});
+
+// --- 关键修改：托管前端静态文件 ---
+app.use(express.static(distPath));
 
 const entities = {};
 const MAP_LIMIT = 28;
@@ -112,5 +128,7 @@ setInterval(() => {
     io.emit('playerListUpdate', entities);
 }, 50);
 
-const PORT = 3000;
+// --- 端口配置 ---
+// 云服务器常用 80 (HTTP) 或 8080/3000
+const PORT = process.env.PORT || 3000;
 httpServer.listen(PORT, '0.0.0.0', () => console.log(`Game Server running on port ${PORT}`));
