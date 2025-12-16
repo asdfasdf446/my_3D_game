@@ -13,6 +13,10 @@ export class CesiumMan {
         this.scene.add(this.container);
         this.mixer = null; this.model = null; this.activeAction = null;
         this.radius = 0.4; this.others = []; this.networkManager = null; this.netId = null; this.isNPC = false;
+        
+        // --- 修复 Bug 1: 显式初始化 ---
+        this.useProxyModel = false; 
+
         this.moveSpeed = 0.04; this.currentDir = 1; this.rotateSpeed = 0.05;
         this.initDebugMesh(); this.loadModel();
     }

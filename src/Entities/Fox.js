@@ -15,6 +15,10 @@ export class Fox {
         this.scene.add(this.container);
         this.mixer = null; this.actions = {}; this.activeAction = null; this.model = null;
         this.radius = 0.4; this.others = []; this.networkManager = null; this.isNPC = false;
+        
+        // --- 修复 Bug 1: 显式初始化 ---
+        this.useProxyModel = false; 
+
         this.currentState = 'Survey';
         this.params = { walkSpeed: 0.05, runSpeed: 0.15, rotateSpeed: 0.05 };
         this.initDebugMesh();

@@ -25,6 +25,9 @@ export class DebugPanel {
         this.netParams = { latency: 0 };
         netFolder.add(this.netParams, 'latency', 0, 1000, 50).onChange(v => this.input.setLatency(v));
         perfFolder.open();
+        
+        // --- 修复 Bug 1: 初始化时强制同步一次状态 ---
+        this.updateGlobalDebug();
     }
     setNetworkManager(nm) { this.netManager = nm; }
     updateGlobalDebug() {
